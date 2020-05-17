@@ -1,0 +1,131 @@
+---
+title: "Regression Models Course Project"
+output:
+  pdf_document: default
+  html_document:
+    keep_md: yes
+---
+# Synopsis
+Our work is conducting for 1974 Motor Trend US magazine. We are looking at a data set of a collection of cars and exploring the relationship between a set of variables and miles per gallon (MPG). We are particularly interested in the following two questions:
+
+- Is an automatic or manual transmission better for MPG
+- Quantify the MPG difference between automatic and manual transmissions
+
+More precisely, we want to know how the MPG is related to other variables, in particular the ‘am’ variable, which defines if the vehicle has an automatic or manual transmission (based on mtcars database).
+
+We found that the transmission type doesn't really impact to MPG. It's expectedly and significantly depends on the weight (wt).
+
+
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(ggthemes)
+library(corrplot)
+library(lmtest)
+library(car)
+data("mtcars")
+head(mtcars)
+```
+
+## An exploratory data analysis
+Let's see some basic relations to the MPG between automatic or manual transmissions by boxplot.
+
+
+A data frame has 32 observations on 11 (numeric) variables:
+
+
+- [, 1]	mpg	Miles/(US) gallon
+- [, 2]	cyl	Number of cylinders
+- [, 3]	disp	Displacement (cu.in.)
+- [, 4]	hp	Gross horsepower
+- [, 5]	drat	Rear axle ratio
+- [, 6]	wt	Weight (1000 lbs)
+- [, 7]	qsec	1/4 mile time
+- [, 8]	vs	Engine (0 = V-shaped, 1 = straight)
+- [, 9]	am	Transmission (0 = automatic, 1 = manual)
+- [,10]	gear	Number of forward gears
+- [,11]	carb	Number of carburetors
+
+```{r}
+mtcars$am <- as.factor(mtcars$am)
+g <- ggplot(mtcars, aes(x=am, y=mpg, fill=am)) + geom_boxplot() + theme_classic()
+g <- g + ggtitle("Relations to the MPG between automatic or manual transmission")
+g <- g + scale_x_discrete(labels=c("Automatic","Manual"))
+g <- g + scale_fill_discrete(name="Transmission",labels=c("Automatic", "Manual"))
+g
+```
+
+
+The manual transmission data is a little bit asymmetric that's why we can't provide statistical inference of basic relations correctly. But we guess that the manual transmission is relatively more impact to MPG.
+Let's make a regression model for account some confounders and to provide correct statistical inference.
+
+
+## Regression analysis
+
+
+We examine two basic linear models: (1) with control variables and (2) without them.
+
+
+(1) $mpg = \beta_{0} + \beta_{1}am + \gamma X + \varepsilon$,
+
+
+(2) $mpg = \beta_{0} + \beta_{1}am + \varepsilon$,
+
+
+where $X$ - a vector of controls.
+
+
+According to the model (2), MPG of the manual transmission is increased by 7.245 (in average) compared to the automatic transmission (as we can see on the plot above):
+
+
+```{r}
+fit1 <- lm(mpg ~ am, data = mtcars)
+summary(fit1)
+```
+
+
+
+Before to fit the model (2) let's conduct correlation analysis. 
+```{r}
+corrplot(cor(mtcars[sapply(mtcars,is.numeric)]), type="upper", method="number")
+```
+
+
+As we can see there are high correlated predictors that will biase our models. So, we will remove "cyl", "disp", "gear".
+
+```{r}
+data <- mtcars[,c(-2,-3,-10)]
+#corrplot(cor(data[sapply(data,is.numeric)]), type="upper", method="number")
+fit2 <- lm(mpg ~ ., data = data)
+summary(fit2)
+par(mfrow = c(2,2))
+plot(fit2)
+shapiro.test(fit2$residuals) #p > 0.05 -> normal distrib
+bptest(fit2) # studentized Breusch-Pagan test if p<0.05 -> heteroskedacity is present
+```
+
+
+if F-stat p-value < 0.05 then it's a quite good model. According to adjusted $R^2$ ~ 0.8, higher percentage of the variance is explained by our model. As we can see on the Shapiro-Wilk test, residuals of model (1) are normal distributed, so our model is quite good. But the Breusch-Pagan test shows that heteroskedacity is present. 
+
+
+Plots show some outliers (Toyota Corolla, Chrysler Imperial, Fiat 128) which may be studied separately. Let's try to remove them and refit the model.
+
+```{r}
+data <- mtcars[c(-20,-17,-18),c(-2,-3,-10)]
+#corrplot(cor(data[sapply(data,is.numeric)]), type="upper", method="number")
+fit2 <- lm(mpg ~ ., data = data)
+summary(fit2)
+par(mfrow = c(2,2))
+plot(fit2)
+shapiro.test(fit2$residuals) #p > 0.05 -> normal distrib
+bptest(fit2) # studentized Breusch-Pagan test if p<0.05 -> heteroskedacity is present
+```
+
+
+Now, our last model is a bit better, the residual vs fitted plot looks more linear and some coefficients are much more significant. We can't use this model for prediction, but we can conclude that the transmission type doesn't really impact to MPG. It's expectedly depends on the weight (wt).
+
+```{r}
+avPlots(fit2, mpg ~ wt)
+```
+
+
+.
